@@ -1,0 +1,8 @@
+# Secrets and credentials — never commit
+secrets/
+srcs/.env
+**/credentials*
+
+# Local / build artefacts
+*.log
+.DS_Store

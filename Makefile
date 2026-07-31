@@ -1,24 +1,38 @@
-NAME = Inception
-DOCKER_COMPOSE_FILE = srcs/docker-compose.yml
+NAME = inception
+COMPOSE_FILE = srcs/docker-compose.yml
+DATA_DIR = /home/ana-pdos/data
 
-all: run_docker
+all: up
 
-run_docker:
-	@echo "\033[33m \n-- RUNNING DOCKER --\033[0m"
-	@docker compose -f $(DOCKER_COMPOSE_FILE) up --build -d
+dirs:
+	@mkdir -p $(DATA_DIR)/mariadb $(DATA_DIR)/wordpress
 
-clean:
-	@echo " \n\033[43m- PRINTING ALL RUNNING CONTAINERS -\033[0m"
-	@docker ps
-	@echo " \n\033[43m- STOPPING CONTAINERS -\033[0m"
-	@docker compose -f srcs/docker-compose.yml down
-	@echo "\n\033[32m ----- All containers stopped! ----- \033[0m"
+up: dirs
+	@docker compose -f $(COMPOSE_FILE) up --build -d
 
-fclean:
-	@$(MAKE) --no-print-directory clean
+down:
+	@docker compose -f $(COMPOSE_FILE) down
+
+stop:
+	@docker compose -f $(COMPOSE_FILE) stop
+
+start:
+	@docker compose -f $(COMPOSE_FILE) start
+
+ps:
+	@docker compose -f $(COMPOSE_FILE) ps
+
+logs:
+	@docker compose -f $(COMPOSE_FILE) logs -f
+
+clean: down
+	@docker compose -f $(COMPOSE_FILE) down --rmi all --volumes
+	@docker volume rm vol-mariadb vol-wordpress 2>/dev/null || true
+
+fclean: clean
 	@docker system prune -af
+	@sudo rm -rf $(DATA_DIR)/mariadb $(DATA_DIR)/wordpress
 
-re_f: fclean all
-re:   clean all
+re: clean up
 
-.PHONY: all clean fclean re re_f run_docker
+.PHONY: all dirs up down stop start ps logs clean fclean re

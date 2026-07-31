@@ -1,50 +1,63 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-DB_PASSWORD="$(cat /run/secrets/db_password 2>/dev/null)"
-DB_PASSWORD="${DB_PASSWORD:-1234}"
+DB_PASSWORD="$(cat /run/secrets/db_password)"
+WP_ADMIN_PASSWORD="$(cat /run/secrets/wp_admin_password)"
+WP_USER_PASSWORD="$(cat /run/secrets/wp_user_password)"
 WP_PATH=/var/www/html
 
-until mariadb -P "${DB_PORT}" -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -e ";" 2>/dev/null; do
-    echo "[wordpress] Waiting for MariaDB..."
-    sleep 2
+: "${DOMAIN_NAME:?DOMAIN_NAME is required}"
+: "${DB_HOST:?DB_HOST is required}"
+: "${DB_NAME:?DB_NAME is required}"
+: "${DB_USER:?DB_USER is required}"
+: "${DB_PORT:?DB_PORT is required}"
+: "${WP_TITLE:?WP_TITLE is required}"
+: "${WP_ADMIN_USER:?WP_ADMIN_USER is required}"
+: "${WP_ADMIN_EMAIL:?WP_ADMIN_EMAIL is required}"
+: "${WP_USER:?WP_USER is required}"
+: "${WP_USER_EMAIL:?WP_USER_EMAIL is required}"
+
+echo "==> Waiting for MariaDB at ${DB_HOST}:${DB_PORT}"
+until mariadb -h "${DB_HOST}" -P "${DB_PORT}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" -e "SELECT 1;" >/dev/null 2>&1; do
+	sleep 2
 done
+echo "==> MariaDB is ready"
 
-if [ ! -f "/var/www/html/wp-config.php" ]; then
-    chown -R www-data:www-data /var/www/html
-    chmod -R g+w /var/www/html/wp-content
+if [ ! -f "${WP_PATH}/wp-config.php" ]; then
+	echo "==> Installing WordPress"
+	chown -R www-data:www-data "${WP_PATH}"
 
-    find /var/www/html -type d -exec chmod 755 {} \;
-    find /var/www/html -type f -exec chmod 644 {} \;
+	wp config create \
+		--path="${WP_PATH}" \
+		--dbname="${DB_NAME}" \
+		--dbuser="${DB_USER}" \
+		--dbpass="${DB_PASSWORD}" \
+		--dbhost="${DB_HOST}:${DB_PORT}" \
+		--allow-root
 
-    wp config create \
-        --path="${WP_PATH}" \
-        --dbname="${DB_NAME}" \
-        --dbuser="${DB_USER}" \
-        --dbpass="${DB_PASSWORD}" \
-        --dbhost="${DB_HOST}:${DB_PORT}" \
-        --allow-root
+	wp core install \
+		--path="${WP_PATH}" \
+		--url="https://${DOMAIN_NAME}" \
+		--title="${WP_TITLE}" \
+		--admin_user="${WP_ADMIN_USER}" \
+		--admin_password="${WP_ADMIN_PASSWORD}" \
+		--admin_email="${WP_ADMIN_EMAIL}" \
+		--skip-email \
+		--allow-root
 
-    wp core install \
-        --path="${WP_PATH}" \
-        --url="https://${DOMAIN_NAME}" \
-        --title="${WP_TITLE}" \
-        --admin_user="${WP_ADMIN_USER}" \
-        --admin_password="${WP_ADMIN_PASSWORD}" \
-        --admin_email="${WP_ADMIN_EMAIL}" \
-        --skip-email \
-        --allow-root
+	wp user create "${WP_USER}" "${WP_USER_EMAIL}" \
+		--path="${WP_PATH}" \
+		--user_pass="${WP_USER_PASSWORD}" \
+		--role=author \
+		--allow-root
 
-    wp user create "${WP_USER}" "${WP_USER_EMAIL}" \
-        --path="${WP_PATH}" \
-        --user_pass="${WP_USER_PASSWORD}" \
-        --role=subscriber \
-        --allow-root
-
-    wp rewrite structure '/%postname%/' --path=/var/www/html --allow-root
-    wp rewrite flush --path=/var/www/html --allow-root
+	wp rewrite structure '/%postname%/' --path="${WP_PATH}" --allow-root
+	wp rewrite flush --path="${WP_PATH}" --allow-root
+	echo "==> WordPress installed"
+else
+	echo "==> WordPress already configured"
 fi
 
-sed -i "s/listen = 0.0.0.0:9000/listen = 0.0.0.0:${WP_PORT}/g" /etc/php/8.2/fpm/pool.d/www.conf
-echo "==> WordPress will be launched on port ${WP_PORT}"
+mkdir -p /run/php
+echo "==> Starting php-fpm"
 exec php-fpm -F

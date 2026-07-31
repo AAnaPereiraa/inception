@@ -1,10 +1,8 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-sed -i "s/listen 443 ssl/listen ${NGINX_PORT} ssl/g" /etc/nginx/nginx.conf
-sed -i "s/listen \[::\]:443 ssl/listen [::]:${NGINX_PORT} ssl/g" /etc/nginx/nginx.conf
-sed -i "s/fastcgi_pass wordpress:9000/fastcgi_pass wordpress:${WP_PORT}/g" /etc/nginx/nginx.conf
-
-echo "==> NGINX will be launched on port ${NGINX_PORT}"
+echo "==> Checking NGINX configuration"
 nginx -t
-nginx -g 'daemon off;'
+
+echo "==> Starting NGINX on port 443 (TLS)"
+exec nginx -g 'daemon off;'

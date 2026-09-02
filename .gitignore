@@ -1,5 +1,4 @@
 # Secrets and credentials — never commit
-secrets/
 srcs/.env
 **/credentials*
 

@@ -1,8 +1,10 @@
-# Secrets and credentials — never commit
-srcs/.env
 secrets/
-**/credentials*
+srcs/.env
 
-# Local / build artefacts
-*.log
+
 .DS_Store
+*.log
+*.swp
+*.swo
+.vscode/
+.idea/
